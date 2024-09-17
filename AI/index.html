@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>BigModel AI</title>
+   <style>
+       body {
+           margin: 0;
+           padding: 0;
+           color: #232323;
+       }
+       p {
+           margin: 0;
+       }
+       .main {
+           height: 100vh;
+           width: 100%;
+           max-width: 600px;
+           margin: 0 auto;
+           background-color: #ededed;
+       }
+       .chat {
+           height: calc(100vh - 60px);
+           display: flex;
+           flex-direction: column;
+           overflow-y: scroll;
+       }
+       .chat::-webkit-scrollbar {
+           width: 2px;
+       }
+       .chat::-webkit-scrollbar-track {
+           background-color: #ededed;
+       }
+       .chat::-webkit-scrollbar-thumb {
+           background-color: #c6c6c6;
+           border-radius: 6px;
+       }
+       .message {
+           margin: 10px;
+           padding: 12px;
+           border-radius: 6px;
+           background-color: white;
+           word-wrap: break-word;
+           max-width: 80%;
+           align-self: flex-start;
+       }
+       .sender {
+           align-self: flex-end;
+           background-color: #95ec69;
+           color: #232323;
+       }
+       .actions {
+           display: flex;
+           align-items: center;
+           height: 44px;
+           padding: 8px;
+           background-color: #f7f7f7;
+           box-shadow: 0 -1px 2px rgba(200, 200, 200, 0.2);
+       }
+       input {
+           border-radius: 6px;
+           flex: 1;
+           height: 34px;
+           border: 1px solid white;
+           padding: 0 8px;
+           color: #232323;
+           outline: none;
+       }
+       input:focus {
+           border-color: white;
+       }
+       button {
+           border-radius: 6px;
+           height: 36px;
+           min-width: 60px;
+           border: none;
+           margin-left: 10px;
+           padding: 0 16px;
+           background-color: #05c162;
+           color: white;
+           cursor: pointer;
+       }
+       button:hover {
+           background-color: #27d47e;
+       }
+   </style>
+</head>
+<body>
+   <div class="main">
+       <div class="chat">
+           <div class="message">哈喽，我是小艺，有关销售方面的问题都可以问我哦!</div>
+       </div>
+       <div class="actions">
+           <input type="text" id="inputMessage" placeholder="请输入消息...">
+           <button onclick="send()">发送</button>
+       </div>
+   </div>
+   <script src="https://unpkg.com/marked@14.1.2/marked.min.js"></script>
+   <script>
+       const inputMessage = document.getElementById('inputMessage');
+       const chat = document.querySelector('.chat');
+
+       function send() {
+           const message = inputMessage.value.trim();
+           if (!message) return;
+
+           const newMessage = document.createElement('div');
+           newMessage.className = 'message sender';
+           newMessage.innerHTML = marked.parse(message);
+           chat.appendChild(newMessage);
+           chat.scrollTop = chat.scrollHeight; // Scroll to bottom
+           inputMessage.value = ''; // Clear input
+
+           const botMessageContainer = document.createElement('div');
+           botMessageContainer.className = 'message';
+           chat.appendChild(botMessageContainer);
+
+           const requestOptions = {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+               body: JSON.stringify({ message: message })
+           };
+
+           fetch('/send', requestOptions)
+               .then(response => {
+                   if (!response.ok) {
+                       throw new Error('Network response was not ok');
+                   }
+                   const reader = response.body.getReader();
+                   const decoder = new TextDecoder('utf-8');
+                   let currentMessage = '';
+
+                   function read() {
+                       reader.read().then(({ done, value }) => {
+                           if (done) {
+                               return;
+                           }
+                           const textChunk = decoder.decode(value);
+                           currentMessage += textChunk;
+                           const lastNewlineIndex = currentMessage.lastIndexOf('\n');
+                           if (lastNewlineIndex !== -1) {
+                               const lastMessage = currentMessage.substring(0, lastNewlineIndex);
+                               currentMessage = currentMessage.substring(lastNewlineIndex + 1);
+                               botMessageContainer.innerHTML = marked.parse(lastMessage);
+                               chat.scrollTop = chat.scrollHeight; // Scroll to bottom
+                               read();
+                            }
+                      }).catch(error => {
+                          console.error('Stream reading error:', error);
+                      });
+                  }
+
+                  read();
+              })
+              .catch(error => {
+                  console.error('Fetch error:', error);
+              });
+      }
+  </script>
+</body>
+</html>
